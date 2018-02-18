@@ -1,0 +1,57 @@
+﻿#pragma kernel ReorderMain
+
+#include "Common.hlsl"
+#include "HLSLSupport.cginc"
+#include "SimplexNoise3D.hlsl"
+
+StructuredBuffer<float3> PositionInput;
+StructuredBuffer<float2> TexCoordInput;
+StructuredBuffer<uint> IndexInput;
+
+AppendStructuredBuffer<TriangleData> Output;
+
+CBUFFER_START(Params)
+    float Time;
+CBUFFER_END
+
+[numthreads(64,1,1)]
+void ReorderMain(uint id : SV_DispatchThreadID)
+{
+    uint offs = id * 3;
+
+    uint i1 = IndexInput[offs + 0];
+    uint i2 = IndexInput[offs + 1];
+    uint i3 = IndexInput[offs + 2];
+
+    float3 p1 = PositionInput[i1];
+    float3 p2 = PositionInput[i2];
+    float3 p3 = PositionInput[i3];
+
+    float2 uv1 = TexCoordInput[i1];
+    float2 uv2 = TexCoordInput[i2];
+    float2 uv3 = TexCoordInput[i3];
+
+    float noffs = Time * 3;
+    p1 *= 1 + pow(abs(snoise(float3(uv1 * 8, noffs))), 5) * 4;
+    p2 *= 1 + pow(abs(snoise(float3(uv2 * 8, noffs))), 5) * 4;
+    p3 *= 1 + pow(abs(snoise(float3(uv3 * 8, noffs))), 5) * 4;
+
+    float3 n = normalize(cross(p2 - p1, p3 - p1));
+
+    TriangleData data;
+
+    data.vertices[0] = float4(p1, 1);
+    data.vertices[1] = float4(p2, 1);
+    data.vertices[2] = float4(p3, 1);
+
+    data.uvs[0] = uv1;
+    data.uvs[1] = uv2;
+    data.uvs[2] = uv3;
+
+    data.normal = n;
+
+    data.pad1 = 0;
+    data.pad2 = 0;
+
+    Output.Append(data);
+}
